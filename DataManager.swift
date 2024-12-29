@@ -1,57 +1,60 @@
+import Foundation
 import SwiftUI
 
-struct ContentView: View {
-    @EnvironmentObject var DataManager: DataManager
-    @State private var ShowingAddEntry = false
-    @State private var SelectedDate: Date? = nil
-    @State private var ShowEditEntry = false
-    @State private var SelectedEntry: Entry? = nil
+enum WeightUnit: String, CaseIterable, Codable {
+    case kg = "kg"
+    case lbs = "lbs"
+    case stone = "stone"
+}
 
-    var body: some View {
-        NavigationView {
-            VStack {
-                CalendarView(SelectedDate: $SelectedDate)
-                if let SelectedDate = SelectedDate {
-                    if let entry = DataManager.GetEntry(for: SelectedDate) {
-                        Text("Weight: \(entry.Weight)")
-                        Text("Body Fat: \(entry.BodyFat)")
-                        Text("Muscle Mass: \(entry.MuscleMass)")
-                        Text("Visceral Fat: \(entry.VisceralFat)")
-                        if let image = entry.Image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 150, height: 150)
-                        }
+struct Entry: Identifiable, Codable {
+    let id = UUID()
+    var date: Date
+    var weight: Double
+    var bodyFat: Double
+    var muscleMass: Double
+    var visceralFat: Int
+    var weightUnit: WeightUnit
+    var image: UIImage?
+}
 
-                        Button("Edit Entry") {
-                            SelectedEntry = entry
-                            ShowEditEntry = true
-                        }
-                    } else {
-                       Text("No Entry for this date")
-                    }
-                }
-            }
-            .navigationTitle("Weight Tracker")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        ShowingAddEntry = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-
-                }
-            }
-            .sheet(isPresented: $ShowingAddEntry) {
-                EditEntryView()
-            }
-            .sheet(isPresented: $ShowEditEntry) {
-                if let SelectedEntry = SelectedEntry {
-                    EditEntryView(Entry: SelectedEntry, EditingMode: true)
-               }
-             }
+class DataManager: ObservableObject {
+    @Published var entries: [Entry] = []
+    
+    init() {
+       loadEntries()
+    }
+    
+    func addEntry(entry: Entry) {
+        entries.append(entry)
+        saveEntries()
+    }
+    
+    func getEntry(for date: Date) -> Entry? {
+        let calendar = Calendar.current
+        return entries.first(where: {
+            calendar.isDate($0.date, inSameDayAs: date)
+        })
+    }
+    
+    func updateEntry(entry: Entry, updatedEntry: Entry) {
+        if let index = entries.firstIndex(where: {$0.id == entry.id}) {
+            entries[index] = updatedEntry
+           saveEntries()
         }
     }
+    
+    private func saveEntries() {
+       if let encoded = try? JSONEncoder().encode(entries) {
+           UserDefaults.standard.set(encoded, forKey: "Entries")
+       }
+   }
+
+   private func loadEntries() {
+       if let data = UserDefaults.standard.data(forKey: "Entries"),
+           let decoded = try? JSONDecoder().decode([Entry].self, from: data) {
+           entries = decoded
+       }
+    }
 }
+
